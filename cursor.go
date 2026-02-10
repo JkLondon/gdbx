@@ -112,8 +112,8 @@ type Cursor struct {
 
 	// Page stack for tree traversal - pages points to pagesBuf to avoid allocation
 	pages       [CursorStackSize]*page
-	pagesBuf    [CursorStackSize]page   // Embedded page structs
-	pgnoCache   [CursorStackSize]pgno   // Cached page numbers (for safe refresh after mmap remap)
+	pagesBuf    [CursorStackSize]page // Embedded page structs
+	pgnoCache   [CursorStackSize]pgno // Cached page numbers (for safe refresh after mmap remap)
 	indices     [CursorStackSize]uint16
 	stackDirty  [CursorStackSize]*page  // Inline dirty page cache - avoids tracker lookup
 	numExpected [CursorStackSize]uint16 // Expected number of entries (for detecting deletions by other cursors)
@@ -304,6 +304,29 @@ func (c *Cursor) Del(flags uint) error {
 	}
 
 	return c.del(flags)
+}
+
+// DeleteRange deletes all entries in the key range [from, to).
+// This is a convenience wrapper that delegates to Txn.DeleteRange.
+// After DeleteRange, the cursor position is invalidated.
+func (c *Cursor) DeleteRange(from, to []byte) (int64, error) {
+	if !c.valid() {
+		return 0, ErrBadCursorError
+	}
+
+	if c.txn.flags&uint32(TxnReadOnly) != 0 {
+		return 0, NewError(ErrPermissionDenied)
+	}
+
+	deleted, err := c.txn.DeleteRange(c.dbi, from, to)
+	if err != nil {
+		return deleted, err
+	}
+
+	// Invalidate cursor — tree structure has changed
+	c.state = cursorInvalid
+
+	return deleted, nil
 }
 
 // Count returns the number of values for the current key.
