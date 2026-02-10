@@ -625,6 +625,327 @@ func drUpdateBranchChildPgno(p *page, idx int, newChildPgno pgno) {
 	binary.LittleEndian.PutUint32(p.Data[offset:], uint32(newChildPgno))
 }
 
+// DeleteDupRange deletes duplicate values in [fromVal, toVal) for a specific key
+// in a DupSort database. Returns the number of values deleted.
+// If toVal is nil, deletes from fromVal to the end.
+// If fromVal is nil, deletes from the beginning to toVal.
+// If both are nil, deletes all values for the key (equivalent to Del with NoDupData).
+func (txn *Txn) DeleteDupRange(dbi DBI, key, fromVal, toVal []byte) (int64, error) {
+	if !txn.valid() {
+		return 0, NewError(ErrBadTxn)
+	}
+
+	if txn.IsReadOnly() {
+		return 0, NewError(ErrPermissionDenied)
+	}
+
+	if int(dbi) >= len(txn.trees) || dbi == FreeDBI {
+		return 0, NewError(ErrBadDBI)
+	}
+
+	tree := &txn.trees[dbi]
+	if tree.Flags&uint16(DupSort) == 0 {
+		return 0, NewError(ErrIncompatible)
+	}
+
+	cursor, err := txn.getCachedCursor(dbi)
+	if err != nil {
+		return 0, err
+	}
+
+	return cursor.deleteDupRange(key, fromVal, toVal)
+}
+
+// DeleteDupRange deletes duplicate values in [fromVal, toVal) for a specific key.
+// See Txn.DeleteDupRange for details.
+func (c *Cursor) DeleteDupRange(key, fromVal, toVal []byte) (int64, error) {
+	if !c.valid() {
+		return 0, ErrBadCursorError
+	}
+
+	if c.txn.flags&uint32(TxnReadOnly) != 0 {
+		return 0, NewError(ErrPermissionDenied)
+	}
+
+	if c.tree.Flags&uint16(DupSort) == 0 {
+		return 0, NewError(ErrIncompatible)
+	}
+
+	return c.deleteDupRange(key, fromVal, toVal)
+}
+
+// deleteDupRange is the internal implementation of DupSort value-range deletion.
+func (c *Cursor) deleteDupRange(key, fromVal, toVal []byte) (int64, error) {
+	// Position at the key
+	_, err := c.setNoGetCurrent(key)
+	if err != nil {
+		return 0, nil // Key not found — nothing to delete
+	}
+
+	// Get the node flags to determine sub-page vs sub-tree
+	p := c.pages[c.top]
+	idx := int(c.indices[c.top])
+	flags := nodeGetFlagsDirect(p, idx)
+
+	dcmp := func(a, b []byte) int {
+		return c.txn.compareDupValues(c.dbi, a, b)
+	}
+
+	// Validate fromVal < toVal
+	if fromVal != nil && toVal != nil && dcmp(fromVal, toVal) >= 0 {
+		return 0, nil
+	}
+
+	if flags&nodeTree != 0 {
+		// Sub-tree: B-tree-aware bulk deletion
+		return c.deleteDupRangeSubTree(key, fromVal, toVal, dcmp)
+	}
+
+	// Inline sub-page or single value
+	return c.deleteDupRangeSubPage(key, fromVal, toVal, dcmp)
+}
+
+// deleteDupRangeSubTree deletes values in [fromVal, toVal) from a DupSort sub-tree.
+func (c *Cursor) deleteDupRangeSubTree(key, fromVal, toVal []byte, dcmp func([]byte, []byte) int) (int64, error) {
+	p := c.pages[c.top]
+	idx := int(c.indices[c.top])
+	treeData := nodeGetDataDirect(p, idx)
+	if treeData == nil || len(treeData) < treeSize {
+		return 0, ErrCorruptedError
+	}
+
+	// Parse sub-tree metadata
+	subRoot := pgno(binary.LittleEndian.Uint32(treeData[8:12]))
+	subHeight := int(binary.LittleEndian.Uint16(treeData[2:4]))
+	subItems := int64(binary.LittleEndian.Uint64(treeData[32:40]))
+
+	if subRoot == invalidPgno || subHeight == 0 || subItems == 0 {
+		return 0, nil
+	}
+
+	// Special case: delete all values
+	if fromVal == nil && toVal == nil {
+		// Free entire sub-tree and delete the main node
+		c.txn.drFreeAllSubTreePages(subRoot, subHeight)
+		mainPage, err := c.touchPage()
+		if err != nil {
+			return 0, err
+		}
+		// delNode handles removing the node and decrementing Items
+		c.pages[c.top] = mainPage
+		c.tree.Items -= uint64(subItems)
+		c.tree.ModTxnid = txnid(c.txn.txnID)
+		c.markTreeDirty()
+		mainPage.removeEntry(int(c.indices[c.top]))
+		c.state = cursorInvalid
+		return subItems, nil
+	}
+
+	// Build a temporary tree struct for the sub-tree to track page count changes
+	var subTree tree
+	subTree.Root = subRoot
+	subTree.Height = uint16(subHeight)
+	subTree.Items = uint64(subItems)
+	subTree.LeafPages = pgno(binary.LittleEndian.Uint32(treeData[16:20]))
+	subTree.BranchPages = pgno(binary.LittleEndian.Uint32(treeData[12:16]))
+
+	// Reuse B-tree range deletion on the sub-tree
+	// In sub-trees, values are stored as keys in the leaf pages
+	newRoot, deleted, err := c.txn.drDeleteInPage(subRoot, subHeight, fromVal, toVal, dcmp, false, &subTree)
+	if err != nil {
+		return deleted, err
+	}
+
+	if deleted == 0 {
+		return 0, nil
+	}
+
+	subTree.Root = newRoot
+	subTree.Items -= uint64(deleted)
+
+	// Collapse sub-tree height
+	for subTree.Height > 1 && subTree.Root != invalidPgno {
+		rootPage, err := c.txn.getPage(subTree.Root)
+		if err != nil || rootPage.isLeaf() || rootPage.numEntries() != 1 {
+			break
+		}
+		childPgno := nodeGetChildPgnoDirect(rootPage, 0)
+		c.txn.freePages = append(c.txn.freePages, subTree.Root)
+		if subTree.BranchPages > 0 {
+			subTree.BranchPages--
+		}
+		subTree.Root = childPgno
+		subTree.Height--
+	}
+
+	// Touch main page for update
+	mainPage, err := c.touchPage()
+	if err != nil {
+		return deleted, err
+	}
+
+	mainIdx := int(c.indices[c.top])
+
+	if subTree.Items == 0 || subTree.Root == invalidPgno {
+		// Sub-tree is now empty — handle empty root page and delete main node
+		if subTree.Root != invalidPgno {
+			c.txn.freePages = append(c.txn.freePages, subTree.Root)
+		}
+		mainPage.removeEntry(mainIdx)
+		c.tree.Items -= uint64(deleted)
+		c.tree.ModTxnid = txnid(c.txn.txnID)
+		c.markTreeDirty()
+		c.pages[c.top] = mainPage
+		c.state = cursorInvalid
+		return deleted, nil
+	}
+
+	// Update the main node with new sub-tree metadata
+	mainKey := nodeGetKeyDirect(mainPage, mainIdx)
+	if mainKey == nil {
+		return deleted, ErrCorruptedError
+	}
+	mainKey = append([]byte(nil), mainKey...) // copy — page will be modified
+
+	subTree.ModTxnid = txnid(c.txn.txnID)
+	nodeData := c.buildNodeWithDupTree(mainKey, &subTree)
+	if err := c.replaceNodeAt(mainPage, mainIdx, nodeData); err != nil {
+		return deleted, err
+	}
+
+	c.pages[c.top] = mainPage
+	c.tree.Items -= uint64(deleted)
+	c.tree.ModTxnid = txnid(c.txn.txnID)
+	c.markTreeDirty()
+	c.state = cursorInvalid
+
+	return deleted, nil
+}
+
+// deleteDupRangeSubPage deletes values in [fromVal, toVal) from an inline sub-page.
+func (c *Cursor) deleteDupRangeSubPage(key, fromVal, toVal []byte, dcmp func([]byte, []byte) int) (int64, error) {
+	p := c.pages[c.top]
+	idx := int(c.indices[c.top])
+	flags := nodeGetFlagsDirect(p, idx)
+
+	// Single value (no dup flags)
+	if flags&(nodeDup|nodeTree) == 0 {
+		val := nodeGetDataDirect(p, idx)
+		inRange := (fromVal == nil || dcmp(val, fromVal) >= 0) && (toVal == nil || dcmp(val, toVal) < 0)
+		if !inRange {
+			return 0, nil
+		}
+		// Delete the entire node
+		mainPage, err := c.touchPage()
+		if err != nil {
+			return 0, err
+		}
+		mainPage.removeEntry(int(c.indices[c.top]))
+		c.pages[c.top] = mainPage
+		c.tree.Items--
+		c.tree.ModTxnid = txnid(c.txn.txnID)
+		c.markTreeDirty()
+		c.state = cursorInvalid
+		return 1, nil
+	}
+
+	// Inline sub-page
+	currentData := nodeGetDataDirect(p, idx)
+	if currentData == nil {
+		return 0, ErrCorruptedError
+	}
+
+	values, err := c.parseSubPageValues(currentData)
+	if err != nil {
+		return 0, err
+	}
+
+	if len(values) == 0 {
+		return 0, nil
+	}
+
+	// Binary search for startIdx (first value >= fromVal)
+	startIdx := 0
+	if fromVal != nil {
+		lo, hi := 0, len(values)
+		for lo < hi {
+			mid := (lo + hi) / 2
+			if dcmp(values[mid], fromVal) < 0 {
+				lo = mid + 1
+			} else {
+				hi = mid
+			}
+		}
+		startIdx = lo
+	}
+
+	// Binary search for endIdx (first value >= toVal)
+	endIdx := len(values)
+	if toVal != nil {
+		lo, hi := startIdx, len(values)
+		for lo < hi {
+			mid := (lo + hi) / 2
+			if dcmp(values[mid], toVal) < 0 {
+				lo = mid + 1
+			} else {
+				hi = mid
+			}
+		}
+		endIdx = lo
+	}
+
+	if startIdx >= endIdx {
+		return 0, nil
+	}
+
+	deleted := int64(endIdx - startIdx)
+
+	// Build remaining values
+	remaining := make([][]byte, 0, len(values)-int(deleted))
+	for i, v := range values {
+		if i < startIdx || i >= endIdx {
+			remaining = append(remaining, v)
+		}
+	}
+
+	// Touch main page
+	mainPage, err := c.touchPage()
+	if err != nil {
+		return 0, err
+	}
+	mainIdx := int(c.indices[c.top])
+
+	nodeKey := nodeGetKeyDirect(mainPage, mainIdx)
+	if nodeKey == nil {
+		return 0, ErrCorruptedError
+	}
+
+	if len(remaining) == 0 {
+		// All values deleted — remove node entirely
+		mainPage.removeEntry(mainIdx)
+	} else if len(remaining) == 1 {
+		// One value left — convert to single-value node
+		if err := c.convertDupToSingle(mainPage, mainIdx, nodeKey, remaining[0]); err != nil {
+			return deleted, err
+		}
+	} else {
+		// Rebuild sub-page with remaining values
+		newSubPage := c.buildDupSubPage(remaining)
+		nodeData := c.buildDupNode(nodeKey, newSubPage)
+		if err := c.replaceNodeAt(mainPage, mainIdx, nodeData); err != nil {
+			return deleted, err
+		}
+	}
+
+	c.pages[c.top] = mainPage
+	c.tree.Items -= uint64(deleted)
+	c.tree.ModTxnid = txnid(c.txn.txnID)
+	c.markTreeDirty()
+	c.state = cursorInvalid
+
+	return deleted, nil
+}
+
 // drMarkDbiDirty marks a DBI as modified in this transaction.
 func (txn *Txn) drMarkDbiDirty(dbi DBI) {
 	if txn.dbiDirty == nil {
