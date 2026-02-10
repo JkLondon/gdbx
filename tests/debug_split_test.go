@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Giulio2002/gdbx"
+	"github.com/JkLondon/gdbx"
 )
 
 // TestDebugSplit tries to trigger the splitIdx=0 case more aggressively
@@ -169,7 +169,7 @@ func TestExtremeCase(t *testing.T) {
 	// until free space is minimal, then try inserting a huge one
 
 	keySize := 4
-	valSize := 36 // Node = 8 + 4 + 36 = 48 bytes, with pointer = 50
+	valSize := 36    // Node = 8 + 4 + 36 = 48 bytes, with pointer = 50
 	numEntries := 80 // 80 * 50 = 4000 bytes
 
 	for i := 0; i < numEntries; i++ {

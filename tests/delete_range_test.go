@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"github.com/Giulio2002/gdbx"
+	"github.com/JkLondon/gdbx"
 )
 
 // TestDeleteRangePreservesOutOfRangeEntries reproduces a bug where deleting

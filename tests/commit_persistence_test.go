@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Giulio2002/gdbx"
+	"github.com/JkLondon/gdbx"
 )
 
 // TestCommitPersistenceWithWriteMap tests that data persists after commit with WriteMap mode.

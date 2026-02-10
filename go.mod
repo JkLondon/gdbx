@@ -1,4 +1,4 @@
-module github.com/Giulio2002/gdbx
+module github.com/JkLondon/gdbx
 
 go 1.23.0
 

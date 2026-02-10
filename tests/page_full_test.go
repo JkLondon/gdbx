@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/Giulio2002/gdbx"
+	"github.com/JkLondon/gdbx"
 )
 
 // TestMaxKeyMaxValueCombination tests that using both maxKey and maxValue

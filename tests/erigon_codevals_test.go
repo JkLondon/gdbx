@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Giulio2002/gdbx"
+	"github.com/JkLondon/gdbx"
 )
 
 // TestErigonCodeValsScenario reproduces the exact Erigon CodeVals scenario

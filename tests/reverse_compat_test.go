@@ -12,7 +12,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/Giulio2002/gdbx"
+	"github.com/JkLondon/gdbx"
 
 	mdbx "github.com/erigontech/mdbx-go/mdbx"
 )
@@ -61,10 +61,10 @@ func TestReverseBasicReadWrite(t *testing.T) {
 
 	// Put some key-value pairs
 	testData := map[string]string{
-		"hello":                      "world",
-		"foo":                        "bar",
-		"github.com/Giulio2002/gdbx": "works",
-		"key123":                     "value456",
+		"hello":                    "world",
+		"foo":                      "bar",
+		"github.com/JkLondon/gdbx": "works",
+		"key123":                   "value456",
 	}
 
 	for k, v := range testData {

@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"unsafe"
 
-	"github.com/Giulio2002/gdbx/spill"
+	"github.com/JkLondon/gdbx/spill"
 )
 
 // put inserts or updates a key-value pair.

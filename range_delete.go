@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"unsafe"
 
-	"github.com/Giulio2002/gdbx/spill"
+	"github.com/JkLondon/gdbx/spill"
 )
 
 // DeleteRange deletes all entries in the key range [from, to).

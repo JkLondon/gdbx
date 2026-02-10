@@ -6,7 +6,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/Giulio2002/gdbx"
+	"github.com/JkLondon/gdbx"
 
 	mdbx "github.com/erigontech/mdbx-go/mdbx"
 )

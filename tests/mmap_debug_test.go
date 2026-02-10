@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/Giulio2002/gdbx"
+	"github.com/JkLondon/gdbx"
 )
 
 // TestMmapExtension tests that mmap extension works correctly in WriteMap mode

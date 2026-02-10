@@ -7,9 +7,9 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/Giulio2002/gdbx/fastmap"
-	mmappkg "github.com/Giulio2002/gdbx/mmap"
-	"github.com/Giulio2002/gdbx/spill"
+	"github.com/JkLondon/gdbx/fastmap"
+	mmappkg "github.com/JkLondon/gdbx/mmap"
+	"github.com/JkLondon/gdbx/spill"
 )
 
 // Global cursor cache - avoids sync.Pool.Put allocation overhead

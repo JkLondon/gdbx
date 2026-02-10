@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Giulio2002/gdbx"
+	"github.com/JkLondon/gdbx"
 	mdbxgo "github.com/erigontech/mdbx-go/mdbx"
 	bolt "go.etcd.io/bbolt"
 )

@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"testing"
 
-	gdbx "github.com/Giulio2002/gdbx"
+	gdbx "github.com/JkLondon/gdbx"
 	mdbx "github.com/erigontech/mdbx-go/mdbx"
 )
 

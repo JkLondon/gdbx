@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	gdbx "github.com/Giulio2002/gdbx"
+	gdbx "github.com/JkLondon/gdbx"
 )
 
 // TestPruneIterateDelete tests the pattern used by erigon's prune:

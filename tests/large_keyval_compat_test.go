@@ -9,7 +9,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/Giulio2002/gdbx"
+	"github.com/JkLondon/gdbx"
 
 	mdbx "github.com/erigontech/mdbx-go/mdbx"
 )
@@ -131,7 +131,7 @@ func TestMaxKeyMaxValBugfix(t *testing.T) {
 	defer genv2.Close()
 
 	boundaryTests := []struct {
-		valSize     int
+		valSize        int
 		shouldBeInline bool
 	}{
 		{2043, true},  // Just under boundary - inline
@@ -210,10 +210,10 @@ func TestLargeKeyValueCompat_MdbxToGdbx(t *testing.T) {
 		{"medium_key_large_val", 500, 2000},
 		{"large_key_small_val", maxKey, 100},
 		{"large_key_medium_val", maxKey, 1000},
-		{"large_key_large_val", maxKey, 2000},       // Near page capacity
-		{"large_key_overflow_val", maxKey, 3000},   // Forces overflow
-		{"maxkey_maxval_combined", maxKey, 2044},   // Exact page capacity
-		{"maxkey_overflow", maxKey, 2045},          // Just over - overflow
+		{"large_key_large_val", maxKey, 2000},    // Near page capacity
+		{"large_key_overflow_val", maxKey, 3000}, // Forces overflow
+		{"maxkey_maxval_combined", maxKey, 2044}, // Exact page capacity
+		{"maxkey_overflow", maxKey, 2045},        // Just over - overflow
 	}
 
 	// Create entries with mdbx

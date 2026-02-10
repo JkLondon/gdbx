@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Giulio2002/gdbx"
+	"github.com/JkLondon/gdbx"
 )
 
 // TestConcurrentReadWrite stress tests concurrent read and write transactions.

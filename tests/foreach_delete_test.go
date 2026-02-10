@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"testing"
 
-	gdbx "github.com/Giulio2002/gdbx"
+	gdbx "github.com/JkLondon/gdbx"
 	mdbxgo "github.com/erigontech/mdbx-go/mdbx"
 )
 

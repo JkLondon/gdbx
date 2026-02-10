@@ -9,8 +9,8 @@ import (
 	"time"
 	"unsafe"
 
-	mmappkg "github.com/Giulio2002/gdbx/mmap"
-	"github.com/Giulio2002/gdbx/spill"
+	mmappkg "github.com/JkLondon/gdbx/mmap"
+	"github.com/JkLondon/gdbx/spill"
 )
 
 // sysPageSize is the system's memory page size, cached at init time.

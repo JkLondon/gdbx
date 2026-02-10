@@ -5,7 +5,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/Giulio2002/gdbx/mmap"
+	"github.com/JkLondon/gdbx/mmap"
 )
 
 // DefaultInitialCap is the default initial capacity (number of pages) per segment.
