@@ -1652,8 +1652,10 @@ func (c *Cursor) descendLeft() ([]byte, []byte, error) {
 	return c.getCurrent()
 }
 
-// descendLeftFast descends to the leftmost leaf and returns first value without full dup init.
+// descendLeftFast descends to the leftmost leaf and returns first value.
 // Uses tree height to avoid IsLeafFast check in the loop.
+// Uses getCurrent() instead of getFirstValueFast() to ensure dup state is properly
+// initialized, which is required when Next() is called after NextNoDup().
 func (c *Cursor) descendLeftFast() ([]byte, []byte, error) {
 	// Calculate levels to descend: tree height - current level - 1
 	// c.top is 0-indexed (root is at c.top=0), height is 1-indexed (leaf-only tree has height=1)
@@ -1667,7 +1669,7 @@ func (c *Cursor) descendLeftFast() ([]byte, []byte, error) {
 		}
 	}
 
-	return c.getFirstValueFast()
+	return c.getCurrent()
 }
 
 // descendRight descends to the rightmost leaf from current position.
