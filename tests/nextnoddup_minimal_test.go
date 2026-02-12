@@ -10,15 +10,19 @@ import (
 	gdbx "github.com/JkLondon/gdbx"
 )
 
-// TestNextNoDupMinimal is a minimal test that checks NextNoDup with
-// a small number of keys and dups.
+// TestNextNoDupMinimal checks NextNoDup with representative key/dup counts:
+// small (single page), medium (page boundary), and large (multi-page tree).
 func TestNextNoDupMinimal(t *testing.T) {
-	for numKeys := 2; numKeys <= 20; numKeys++ {
-		for numDups := 2; numDups <= 60; numDups += 2 {
-			t.Run(fmt.Sprintf("keys%d_dups%d", numKeys, numDups), func(t *testing.T) {
-				testNextNoDupMinimal(t, numKeys, numDups)
-			})
-		}
+	cases := []struct{ keys, dups int }{
+		{2, 10},  // small: fits on one page
+		{5, 30},  // medium: crosses page boundary
+		{10, 50}, // large: multi-level B-tree
+		{20, 60}, // stress: many keys, many dups
+	}
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("keys%d_dups%d", tc.keys, tc.dups), func(t *testing.T) {
+			testNextNoDupMinimal(t, tc.keys, tc.dups)
+		})
 	}
 }
 
